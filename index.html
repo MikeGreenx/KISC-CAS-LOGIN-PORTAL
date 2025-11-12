@@ -96,6 +96,8 @@
     <label>Student Email / ID</label>
     <input type="text" name="studentId" id="studentId" required>
     <button type="button" onclick="checkHours()">Check My Hours</button>
+    <div id="hoursSummary" style="margin-top:10px; color: gold; font-weight:500;"></div>
+
     <p id="summary"></p>
 
     <label>Student Name (only first time)</label>
@@ -155,43 +157,79 @@
   </form>
 
   <script>
-  const scriptURL = "https://script.google.com/macros/s/AKfycbxC_981gm8HedrJLdDtKccF1UFiVxGZsl1zuoXGuj-TBzamtm2P7M7ravEydFS-OZKJZQ/exec";
-  const form = document.getElementById("casForm");
-  const toast = document.getElementById("toast");
+    const scriptURL = "https://script.google.com/macros/s/AKfycbxC_981gm8HedrJLdDtKccF1UFiVxGZsl1zuoXGuj-TBzamtm2P7M7ravEydFS-OZKJZQ/exec";
+    const form = document.getElementById("casForm");
+    const summaryDiv = document.getElementById("hoursSummary");
 
-  form.addEventListener("submit", e => {
-    e.preventDefault();
-
-    const data = Object.fromEntries(new FormData(form).entries());
-
-    fetch(scriptURL, {
-      method: "POST",
-      body: JSON.stringify(data)
-    })
-    .then(res => {
-      if (res.ok) {
-        showToast("✅ Your CAS activity has been submitted successfully!", "#00ff7f");
-        form.reset();
-      } else {
-        showToast("⚠️ Server error. Please try again.", "#ffcc00");
-      }
-    })
-    .catch(err => {
-      console.error(err);
-      showToast("❌ Network error. Please check your connection.", "#ff4444");
+    // POST: submit new entry
+    form.addEventListener("submit", e => {
+      e.preventDefault();
+      const data = Object.fromEntries(new FormData(form).entries());
+      fetch(scriptURL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data)
+      })
+        .then(res => res.json())
+        .then(res => {
+          if (res.status === "success") {
+            summaryDiv.style.color = "#00ff7f";
+            summaryDiv.textContent = "✅ Hours submitted successfully!";
+            form.reset();
+          } else {
+            summaryDiv.style.color = "red";
+            summaryDiv.textContent = "❌ Submission failed: " + res.message;
+          }
+        })
+        .catch(() => {
+          summaryDiv.style.color = "red";
+          summaryDiv.textContent = "❌ Network error. Please try again.";
+        });
     });
-  });
 
-  function showToast(message, color) {
-    toast.textContent = message;
-    toast.style.color = color;
-    toast.classList.add("show");
+    // GET: fetch total hours
+    function checkHours() {
+      const studentId = document.getElementById("studentId").value.trim();
+      if (!studentId) {
+        summaryDiv.style.color = "orange";
+        summaryDiv.textContent = "⚠️ Please enter your Student ID first.";
+        return;
+      }
 
-    setTimeout(() => {
-      toast.classList.remove("show");
-    }, 4000);
-  }
-</script>
+      summaryDiv.style.color = "gold";
+      summaryDiv.textContent = "⏳ Checking your hours...";
+
+      fetch(`${scriptURL}?studentId=${encodeURIComponent(studentId)}`)
+        .then(async res => {
+          const text = await res.text();
+          try {
+            const data = JSON.parse(text);
+            if (data.error) {
+              summaryDiv.style.color = "red";
+              summaryDiv.textContent = "❌ " + data.error;
+            } else {
+              summaryDiv.style.color = "#00ff7f";
+              summaryDiv.innerHTML = `
+                ✅ <b>${data.studentName}</b><br>
+                Creativity: ${data.creativityHours || 0} hrs<br>
+                Action: ${data.actionHours || 0} hrs<br>
+                Service: ${data.serviceHours || 0} hrs<br>
+                <b>Total: ${data.totalHours || 0} hrs</b>
+              `;
+            }
+          } catch (err) {
+            console.error("Raw response:", text);
+            summaryDiv.style.color = "orange";
+            summaryDiv.innerHTML = "⚠️ Script returned invalid data:<br>" + text;
+          }
+        })
+        .catch(err => {
+          console.error("Network error:", err);
+          summaryDiv.style.color = "red";
+          summaryDiv.textContent = "❌ Network or permission error.";
+        });
+    }
+  </script>
 
 
 
